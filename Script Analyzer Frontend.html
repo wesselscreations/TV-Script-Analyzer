@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Script Analyzer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        h1 {
+            color: #2c3e50;
+        }
+        .container {
+            display: flex;
+            gap: 20px;
+        }
+        .upload-container {
+            flex: 1;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+        }
+        .script-preview {
+            flex: 2;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            min-height: 500px;
+            background-color: white;
+            overflow: auto;
+        }
+        .character-list {
+            flex: 1;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+        }
+        .upload-area {
+            border: 2px dashed #ccc;
+            padding: 30px;
+            text-align: center;
+            margin-bottom: 20px;
+            cursor: pointer;
+        }
+        .upload-area:hover {
+            border-color: #2c3e50;
+        }
+        .upload-area input {
+            display: none;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .character {
+            margin-bottom: 10px;
+            padding: 8px;
+            border-radius: 4px;
+            background-color: white;
+            border-left: 4px solid #3498db;
+        }
+        .character label {
+            display: flex;
+            align-items: center;
+        }
+        .color-picker {
+            margin-left: auto;
+            width: 30px;
+            height: 30px;
+            border: none;
+            cursor: pointer;
+        }
+        .highlight {
+            padding: 0 2px;
+            border-radius: 3px;
+        }
+        #processBtn {
+            width: 100%;
+            margin-top: 20px;
+            background-color: #2ecc71;
+        }
+        #processBtn:hover {
+            background-color: #27ae60;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+        .prop-item {
+            margin: 5px 0;
+            padding: 5px;
+            background-color: #f5f5f5;
+            border-radius: 3px;
+        }
+        .tab-container {
+            margin-bottom: 20px;
+        }
+        .tab-buttons {
+            display: flex;
+            border-bottom: 1px solid #ddd;
+        }
+        .tab-button {
+            padding: 10px 20px;
+            background-color: #f1f1f1;
+            border: none;
+            cursor: pointer;
+            margin-right: 5px;
+            border-radius: 5px 5px 0 0;
+        }
+        .tab-button.active {
+            background-color: #3498db;
+            color: white;
+        }
+        .tab-content {
+            display: none;
+            padding: 20px 0;
+        }
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>📺 TV Script Analyzer</h1>
+        <p>Upload your script to identify characters and props</p>
+    </header>
+
+    <main>
+        <div class="container">
+            <div class="upload-container">
+                <h2>Upload Script</h2>
+                <div class="upload-area" id="uploadArea">
+                    <p>Drag and drop your PDF script here<br>or click to select a file</p>
+                    <input type="file" id="fileInput" accept="application/pdf">
+                </div>
+                
+                <div id="fileInfo"></div>
+                
+                <button id="processBtn">Process Script</button>
+                
+                <div class="loading" id="loading">
+                    <p>Processing script... Please wait</p>
+                </div>
+            </div>
+            
+            <div class="script-preview">
+                <div class="tab-container">
+                    <div class="tab-buttons">
+                        <button class="tab-button active" data-tab="scriptTab">Script</button>
+                        <button class="tab-button" data-tab="propsTab">Props</button>
+                    </div>
+                    
+                    <div class="tab-content active" id="scriptTab">
+                        <h2>Script Preview</h2>
+                        <div id="scriptContent">
+                            <p>Script content will appear here after processing...</p>
+                        </div>
+                    </div>
+                    
+                    <div class="tab-content" id="propsTab">
+                        <h2>Identified Props</h2>
+                        <div id="propsContent">
+                            <p>Props will be listed here after processing...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="character-list">
+                <h2>Characters</h2>
+                <div id="characterList">
+                    <p>Characters will appear here after processing...</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Connect to Google API and handle auth
+        let isAuthenticated = false;
+        
+        function onGoogleApiLoad() {
+            gapi.load('client:auth2', initClient);
+        }
+        
+        function initClient() {
+            gapi.client.init({
+                apiKey: 'AIzaSyBkJCqUsujLbV3S1mHq-h3C2eKYwYqBejg',
+                clientId: '860527559769-m4c1f3qh44o3ujns46ls0m8607hqlg8f.apps.googleusercontent.com',
+                discoveryDocs: [
+                    "https://www.googleapis.com/discovery/v1/apis/drive/v3/rest",
+                    "https://sheets.googleapis.com/$discovery/rest?version=v4"
+                ],
+                scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets'
+            }).then(() => {
+                // Listen for sign-in state changes
+                gapi.auth2.getAuthInstance().isSignedIn.listen(updateSigninStatus);
+                
+                // Handle the initial sign-in state
+                updateSigninStatus(gapi.auth2.getAuthInstance().isSignedIn.get());
+            });
+        }
+        
+        function updateSigninStatus(isSignedIn) {
+            isAuthenticated = isSignedIn;
+            if (!isSignedIn) {
+                gapi.auth2.getAuthInstance().signIn();
+            }
+        }
+        
+        // UI Interaction
+        document.addEventListener('DOMContentLoaded', function() {
+            const uploadArea = document.getElementById('uploadArea');
+            const fileInput = document.getElementById('fileInput');
+            const fileInfo = document.getElementById('fileInfo');
+            const processBtn = document.getElementById('processBtn');
+            const loading = document.getElementById('loading');
+            const scriptContent = document.getElementById('scriptContent');
+            const characterList = document.getElementById('characterList');
+            const propsContent = document.getElementById('propsContent');
+            
+            // Tab switching
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.addEventListener('click', function() {
+                    // Remove active class from all buttons and tabs
+                    document.querySelectorAll('.tab-button').forEach(btn => {
+                        btn.classList.remove('active');
+                    });
+                    document.querySelectorAll('.tab-content').forEach(tab => {
+                        tab.classList.remove('active');
+                    });
+                    
+                    // Add active class to current button and tab
+                    this.classList.add('active');
+                    document.getElementById(this.dataset.tab).classList.add('active');
+                });
+            });
+            
+            // Handle file upload via drag and drop
+            uploadArea.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                this.style.borderColor = '#3498db';
+            });
+            
+            uploadArea.addEventListener('dragleave', function(e) {
+                e.preventDefault();
+                this.style.borderColor = '#ccc';
+            });
+            
+            uploadArea.addEventListener('drop', function(e) {
+                e.preventDefault();
+                this.style.borderColor = '#ccc';
+                
+                const files = e.dataTransfer.files;
+                if (files.length) {
+                    handleFile(files[0]);
+                }
+            });
+            
+            // Handle file upload via file input
+            uploadArea.addEventListener('click', function() {
+                fileInput.click();
+            });
+            
+            fileInput.addEventListener('change', function() {
+                if (this.files.length) {
+                    handleFile(this.files[0]);
+                }
+            });
+            
+            function handleFile(file) {
+                if (file.type !== 'application/pdf') {
+                    fileInfo.innerHTML = '<p style="color: red;">Please upload a PDF file</p>';
+                    return;
+                }
+                
+                fileInfo.innerHTML = `
+                    <p><strong>File:</strong> ${file.name}</p>
+                    <p><strong>Size:</strong> ${(file.size / 1024).toFixed(2)} KB</p>
+                `;
+                
+                // Store the file for later processing
+                window.scriptFile = file;
+            }
+            
+            // Process button click
+            processBtn.addEventListener('click', function() {
+                if (!window.scriptFile) {
+                    alert('Please upload a script file first');
+                    return;
+                }
+                
+                if (!isAuthenticated) {
+                    alert('Please sign in with Google first');
+                    gapi.auth2.getAuthInstance().signIn();
+                    return;
+                }
+                
+                loading.style.display = 'block';
+                
+                // This would be where we'd upload to Google Drive
+                // For demo purposes, let's simulate processing
+                setTimeout(() => {
+                    processScript();
+                    loading.style.display = 'none';
+                }, 2000);
+            });
+            
+            // Mock script processing for demonstration
+            function processScript() {
+                // Simulated script data with highlighted characters and props
+                const mockCharacters = [
+                    { name: "JAMES", color: "#FFD700" },
+                    { name: "HANNAH", color: "#FF69B4" },
+                    { name: "RODRIGUEZ", color: "#32CD32" }
+                ];
+                
+                const mockScript = `
+                    <p>INT. LIVING ROOM - DAY</p>
+                    
+                    <p><span class="highlight" style="background-color: #FFD700">JAMES</span> sits on the couch, scrolling through his phone.</p>
+                    
+                    <p><span class="highlight" style="background-color: #FFD700">JAMES</span><br>
+                    Have you seen my keys? I can't find them anywhere.</p>
+                    
+                    <p><span class="highlight" style="background-color: #FF69B4">HANNAH</span> enters, holding a coffee mug.</p>
+                    
+                    <p><span class="highlight" style="background-color: #FF69B4">HANNAH</span><br>
+                    Check under the mail on the counter. I saw them there earlier.</p>
+                    
+                    <p><span class="highlight" style="background-color: #FFD700">JAMES</span> gets up and finds his keys under a pile of mail.</p>
+                    
+                    <p><span class="highlight" style="background-color: #FFD700">JAMES</span><br>
+                    Thanks! I'd lose my head if it wasn't attached.</p>
+                    
+                    <p><span class="highlight" style="background-color: #32CD32">RODRIGUEZ</span> knocks on the door and enters.</p>
+                    
+                    <p><span class="highlight" style="background-color: #32CD32">RODRIGUEZ</span><br>
+                    Hey folks, ready for the meeting?</p>
+                `;
+                
+                const mockProps = [
+                    { name: "Phone", owner: "JAMES", scene: "Living Room" },
+                    { name: "Keys", owner: "JAMES", scene: "Living Room" },
+                    { name: "Coffee Mug", owner: "HANNAH", scene: "Living Room" },
+                    { name: "Mail", owner: "N/A", scene: "Counter" }
+                ];
+                
+                // Update the UI with mock data
+                scriptContent.innerHTML = mockScript;
+                
+                // Populate character list
+                let characterHTML = '';
+                mockCharacters.forEach(char => {
+                    characterHTML += `
+                        <div class="character">
+                            <label>
+                                <input type="checkbox" checked>
+                                ${char.name}
+                                <input type="color" class="color-picker" value="${char.color}">
+                            </label>
+                        </div>
+                    `;
+                });
+                characterList.innerHTML = characterHTML;
+                
+                // Populate props list
+                let propsHTML = '<ul>';
+                mockProps.forEach(prop => {
+                    const character = mockCharacters.find(c => c.name === prop.owner);
+                    const styleAttr = character ? `style="border-left: 4px solid ${character.color}"` : '';
+                    
+                    propsHTML += `
+                        <li class="prop-item" ${styleAttr}>
+                            <strong>${prop.name}</strong> - 
+                            ${prop.owner !== 'N/A' ? 'Owned by ' + prop.owner : 'No specific owner'} 
+                            (Scene: ${prop.scene})
+                        </li>
+                    `;
+                });
+                propsHTML += '</ul>';
+                propsContent.innerHTML = propsHTML;
+                
+                // Add event listeners to character checkboxes
+                document.querySelectorAll('.character input[type="checkbox"]').forEach(checkbox => {
+                    checkbox.addEventListener('change', function() {
+                        const characterName = this.parentElement.textContent.trim();
+                        const highlights = document.querySelectorAll(`.highlight:contains('${characterName}')`);
+                        
+                        if (this.checked) {
+                            highlights.forEach(el => {
+                                el.style.display = 'inline';
+                            });
+                        } else {
+                            highlights.forEach(el => {
+                                el.style.display = 'none';
+                            });
+                        }
+                    });
+                });
+                
+                // Add event listeners to color pickers
+                document.querySelectorAll('.character .color-picker').forEach(picker => {
+                    picker.addEventListener('change', function() {
+                        const characterName = this.parentElement.textContent.trim();
+                        const highlights = document.querySelectorAll(`.highlight:contains('${characterName}')`);
+                        
+                        highlights.forEach(el => {
+                            el.style.backgroundColor = this.value;
+                        });
+                        
+                        // Also update prop borders
+                        const propItems = document.querySelectorAll(`.prop-item[data-character="${characterName}"]`);
+                        propItems.forEach(item => {
+                            item.style.borderLeftColor = this.value;
+                        });
+                    });
+                });
+            }
+        });
+    </script>
+    
+    <!-- Load the Google API client library -->
+    <script src="https://apis.google.com/js/api.js?onload=onGoogleApiLoad"></script>
+</body>
+</html>
